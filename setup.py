@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='tasks',
-      version='0.2',
+      version='0.3',
       description='Manager for delayed tasks',
       url='http://github.com/oman36/tasks',
       author='Petrov Vladimir',
@@ -10,5 +10,7 @@ setup(name='tasks',
       packages=['tasks'],
       install_requires=[
             'jsonschema',
+            'flask',
+            'gevent',
       ],
       zip_safe=False)
