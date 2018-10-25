@@ -21,7 +21,7 @@ class FatalException(TasksBaseException):
     code = 500
 
     def __init__(self, message):
-        sys.stderr.write(message)
+        sys.stderr.write('Fatal error: ' + message + '\n')
         super().__init__('Server error')
 
 
