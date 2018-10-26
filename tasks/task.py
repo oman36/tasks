@@ -1,10 +1,12 @@
 import jsonschema
+import json
 
 from .exceptions import (
     BadRequestException,
     FatalException,
     TaskNotExistException,
 )
+from .orm import Session, Task
 
 tasks_inited = dict()
 
@@ -42,7 +44,7 @@ class BaseTask:
         super().__init_subclass__()
 
 
-def run_command(args: dict):
+def run_command(args: dict, task_in_db=None):
     if 'task_name' not in args:
         raise BadRequestException('task_name is required')
 
@@ -56,4 +58,20 @@ def run_command(args: dict):
     except jsonschema.ValidationError as er:
         raise BadRequestException(er.__str__())
 
-    return called_task['callback'](**args['params'])
+    session = Session()
+
+    if task_in_db is None:
+        task_in_db = Task(
+            name=args['task_name'],
+            params=json.dumps(args['params']),
+            status='new',
+        )
+        session.add(task_in_db)
+        session.commit()
+
+    result = called_task['callback'](**args['params'])
+
+    task_in_db.status = 'finished'
+    session.commit()
+
+    return result

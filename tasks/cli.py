@@ -3,10 +3,17 @@ import json
 import sys
 
 from .exceptions import BadRequestException
+from .orm import Base, init as orm_init
+from .settings import init_settings, SETTINGS
 from .task import run_command
 
 
-def run_cli():
+def run_cli(settings_file):
+    init_settings(settings_file)
+    engine = orm_init(SETTINGS['db'])
+
+    Base.metadata.create_all(engine)
+
     parser = argparse.ArgumentParser(description="calculate X to the power of Y")
     parser.add_argument("task_name")
     parser.add_argument("--params", required=False)

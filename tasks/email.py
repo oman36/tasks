@@ -1,32 +1,27 @@
 import smtplib
-import os
-from .exceptions import FatalException
 
-from_address = os.environ.get('SMTP_FROM')
-host = os.environ.get('SMTP_HOST')
-password = os.environ.get('SMTP_PASS')
-port = os.environ.get('SMTP_PORT')
-
-if not all((from_address, host, port)):
-    raise FatalException('Env variables SMTP_FROM, SMTP_HOST, SMTP_PORT are required')
+from .settings import SETTINGS
 
 
 def send_email(to: list, subject: str, body_text: str):
     """
     Send an email
     """
+    email_settings = SETTINGS['email']
+
     body = "\r\n".join((
-        "From: %s" % from_address,
+        "From: %s" % email_settings['from'],
         "To: %s" % to,
         "Subject: %s" % subject,
         "",
         body_text
     ))
 
-    server = smtplib.SMTP_SSL(host, port, timeout=1)
-    if password:
-        server.login(from_address, password)
+    server = smtplib.SMTP_SSL(email_settings['host'], email_settings['port'], timeout=1)
+
+    if 'pass' in email_settings:
+        server.login(email_settings['from'], email_settings['pass'])
         server.auth_plain()
-    server.sendmail(from_address, to, body)
+    server.sendmail(email_settings['from'], to, body)
     server.quit()
     return
