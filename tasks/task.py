@@ -60,18 +60,23 @@ def run_command(args: dict, task_in_db=None):
 
     session = Session()
 
-    if task_in_db is None:
-        task_in_db = Task(
-            name=args['task_name'],
-            params=json.dumps(args['params']),
-            status='new',
-        )
-        session.add(task_in_db)
-        session.commit()
+    if args['task_name'] != 'runserver':
+        if task_in_db is None:
+            task_in_db = Task(
+                name=args['task_name'],
+                params=json.dumps(args['params']),
+                status='new',
+            )
+            session.add(task_in_db)
+            session.commit()
+        else:
+            session.add(task_in_db)
 
     result = called_task['callback'](**args['params'])
 
-    task_in_db.status = 'finished'
-    session.commit()
+    if args['task_name'] != 'runserver':
+        task_in_db.status = 'finished'
+        task_in_db.result = str(result)
+        session.commit()
 
     return result

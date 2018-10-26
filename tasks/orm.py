@@ -29,7 +29,8 @@ class Task(Base):
     name = Column(String)
     params = Column(Text)
     status = Column(String, default='new')
+    result = Column(String)
     created_at = Column(DateTime, default=datetime.now)
 
     def __repr__(self):
-        return f"<Task(name='{self.name}', status='{self.status}')>"
+        return f"<Task(name='{self.name}', params='{self.params[:10]}...', status='{self.status}')>"
