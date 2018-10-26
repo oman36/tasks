@@ -30,6 +30,7 @@ class Task(Base):
     params = Column(Text)
     status = Column(String, default='new')
     result = Column(String)
+    files = Column(Text)
     created_at = Column(DateTime, default=datetime.now)
 
     def __repr__(self):

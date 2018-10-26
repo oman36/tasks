@@ -38,8 +38,21 @@ def init_settings(filename):
                     }
                 },
                 "required": ["from", "host", "port"]
+            },
+            "files": {
+                "type": "object",
+                "properties": {
+                    "tmp_dir": {
+                        "type": "string"
+                    },
+                    "web_dir": {
+                        "type": "string"
+                    },
+                },
+                "required": ["web_dir"]
             }
-        }
+        },
+        "required": ["files", "db", "email"]
     }
 
     with open(filename) as conf:

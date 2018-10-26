@@ -1,5 +1,9 @@
-import jsonschema
+import hashlib
 import json
+import os
+import time
+
+import jsonschema
 
 from .exceptions import (
     BadRequestException,
@@ -7,6 +11,7 @@ from .exceptions import (
     TaskNotExistException,
 )
 from .orm import Session, Task
+from .settings import SETTINGS
 
 tasks_inited = dict()
 
@@ -44,6 +49,28 @@ class BaseTask:
         super().__init_subclass__()
 
 
+class Result:
+    tmp_dir = SETTINGS.get('files', {}).get('tmp_dir', '/tmp/task_files/')
+
+    def __init__(self, msg: str, files: list):
+        self.msg = msg
+        self.files = files
+
+        if not os.path.isdir(self.tmp_dir):
+            os.makedirs(self.tmp_dir)
+
+        for file in self.files:
+            file['data'].seek(0)
+            file_tmp_name = hashlib.md5((file['name'] + str(time.time())).encode()).hexdigest()
+            file['tmp_path'] = os.path.join(self.tmp_dir, file_tmp_name)
+            with open(file['tmp_path'], 'wb+') as output:
+                for chunk in iter(lambda: file['data'].read(1024), bytes()):
+                    output.write(chunk)
+
+    def __str__(self):
+        return self.msg
+
+
 def run_command(args: dict, task_in_db=None):
     if 'task_name' not in args:
         raise BadRequestException('task_name is required')
@@ -78,5 +105,6 @@ def run_command(args: dict, task_in_db=None):
         task_in_db.status = 'finished'
         task_in_db.result = str(result)
         session.commit()
+    session.close()
 
     return result
