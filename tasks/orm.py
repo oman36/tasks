@@ -14,7 +14,7 @@ session_factory = sessionmaker()
 
 
 def init(settings):
-    engine = create_engine(settings['url'], echo=True)
+    engine = create_engine(settings['url'])
     session_factory.configure(bind=engine)
     return engine
 
