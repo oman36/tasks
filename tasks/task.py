@@ -10,6 +10,7 @@ from .exceptions import (
     BadRequestException,
     FatalException,
     TaskNotExistException,
+    TaskLimitException,
 )
 from .orm import globals_sessions, Task as TaskModel
 from .settings import SETTINGS
@@ -202,3 +203,14 @@ class WebTask(Task):
     def save_model(self):
         globals_sessions[0].add(self.model)
         globals_sessions[0].commit()
+
+
+def check_limit(name):
+    if name in SETTINGS['limits']['names']:
+        c = globals_sessions[0].query(TaskModel).filter_by(status='new', name=name).count()
+        if c > SETTINGS['limits']['names'][name]:
+            raise TaskLimitException(f'Limit for task type "{name}" was reached.'
+                                     ' The task was put in a queue.')
+
+    if SETTINGS['limits']['global'] < globals_sessions[0].query(TaskModel).filter_by(status='new').count():
+        raise TaskLimitException('Limit for task was reached. The task was put in a queue.')

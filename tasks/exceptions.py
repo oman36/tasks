@@ -34,3 +34,7 @@ class TaskNotExistException(TasksBaseException):
 
 class BadRequestException(TasksBaseException):
     code = 400
+
+
+class TaskLimitException(TasksBaseException):
+    code = 502

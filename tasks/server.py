@@ -10,7 +10,7 @@ from flask import send_file
 from .exceptions import TasksBaseException
 from .orm import Task, session_factory, globals_sessions
 from .settings import SETTINGS
-from .task import WebTask
+from .task import WebTask, check_limit
 
 app = Flask(__name__)
 
@@ -26,6 +26,8 @@ def run_task():
             params=data['params'],
             email=data.get('email'),
         )
+
+        check_limit(web_task.task_name)
 
         result = web_task.run()
 

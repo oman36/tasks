@@ -50,9 +50,22 @@ def init_settings(filename):
                     },
                 },
                 "required": ["web_dir"]
-            }
+            },
+            "limits": {
+                "type": "object",
+                "properties": {
+                    "global": {
+                        "type": "number",
+                        "minimum": 1
+                    },
+                    "names": {
+                        "type": "object",
+                    }
+                },
+                "required": ["global", "names"]
+            },
         },
-        "required": ["files", "db", "email"]
+        "required": ["files", "db", "email", "limits"]
     }
 
     with open(filename) as conf:
@@ -77,4 +90,3 @@ def init_settings(filename):
         jsonschema.validate(SETTINGS, json_schema)
     except jsonschema.ValidationError as er:
         raise FatalException(er.__str__())
-

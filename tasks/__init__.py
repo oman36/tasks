@@ -1,4 +1,6 @@
+import copy
 from multiprocessing import Process, Pool
+from time import sleep
 
 from gevent.pywsgi import WSGIServer
 
@@ -6,6 +8,7 @@ from .cli import run_cli
 from .server import app as wsgi_app
 from .task import BaseTask, task, Result, WebTask
 from .orm import Task as TaskModel, session_factory, globals_sessions
+from .settings import SETTINGS
 
 
 def restart_task(task_obj):
@@ -15,13 +18,38 @@ def restart_task(task_obj):
 
 def restart_tasks():
     session = session_factory()
-    pool = Pool(10)
-    while True:
-        tasks = session.query(TaskModel).filter_by(status='new')[0:10]
-        if len(tasks) == 0:
-            break
+    pool_size = min(10, SETTINGS['limits']['global'])
 
-        pool.map(restart_task, tasks)
+    pool = Pool(pool_size)
+    queryset = session.query(TaskModel).filter_by(status='new').order_by('created_at')
+
+    while True:
+        exist_more = True
+        offset = 0
+        limits = copy.deepcopy(SETTINGS['limits']['names'])
+        filtered = []
+        current_queryset = queryset
+        while exist_more and len(filtered) < pool_size:
+            tasks = current_queryset[offset:offset+pool_size]
+            offset += pool_size
+            exist_more = len(tasks) == pool_size
+
+            for current in tasks:
+                if current.name in limits:
+                    limits[current.name] -= 1
+
+                    if limits[current.name] == 0:
+                        current_queryset = current_queryset.filter(TaskModel.name != current.name)
+
+                    if limits[current.name] < 0:
+                        continue
+                filtered.append(current)
+
+        if len(filtered) == 0:
+            sleep(5)
+            continue
+
+        pool.map(restart_task, filtered)
 
 
 @task(name='runserver')
