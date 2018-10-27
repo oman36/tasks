@@ -1,28 +1,26 @@
 from multiprocessing import Process, Pool
-import json
 
 from gevent.pywsgi import WSGIServer
 
 from .cli import run_cli
 from .server import app as wsgi_app
-from .task import BaseTask, task, run_command, Result
-from .orm import Task, Session
+from .task import BaseTask, task, Result, WebTask
+from .orm import Task as TaskModel, session_factory, globals_sessions
 
 
-def restart_task(task_obj: Task):
-    run_command({
-        'task_name': task_obj.name,
-        'params': json.loads(task_obj.params),
-    }, task_obj)
+def restart_task(task_obj):
+    globals_sessions[0] = session_factory()
+    WebTask(task_obj).run()
 
 
 def restart_tasks():
-    session = Session()
+    session = session_factory()
     pool = Pool(10)
     while True:
-        tasks = session.query(Task).filter_by(status='new')[0:10]
+        tasks = session.query(TaskModel).filter_by(status='new')[0:10]
         if len(tasks) == 0:
             break
+
         pool.map(restart_task, tasks)
 
 

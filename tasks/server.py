@@ -1,33 +1,34 @@
 import json
 import os
-import shutil
 
 from flask import Flask
+from flask import abort
 from flask import jsonify
 from flask import request
 from flask import send_file
-from flask import abort
 
-from .email import send_email
 from .exceptions import TasksBaseException
-from .orm import Task, Session
+from .orm import Task, session_factory, globals_sessions
 from .settings import SETTINGS
-from .task import run_command, Result
+from .task import WebTask
 
 app = Flask(__name__)
 
 
 @app.route('/', methods=['POST'])
 def run_task():
+    globals_sessions[0] = session_factory()
+
     data = request.json
     try:
-        task_in_db = Task(
-            name=data['task_name'],
-            params=json.dumps(data['params']),
-            status='new',
-        ) if not 'email' in data else None
+        web_task = WebTask(
+            data['task_name'],
+            params=data['params'],
+            email=data.get('email'),
+        )
 
-        result = run_command(data, task_in_db=task_in_db)
+        result = web_task.run()
+
     except TasksBaseException as er:
         return jsonify({
             'status': 'ERROR',
@@ -36,13 +37,6 @@ def run_task():
         })
 
     if 'email' in data:
-        send_email(
-            [data['email']],
-            'Task {} was completed.'.format(data['task_name']),
-            str(result),
-            result.files if isinstance(result, Result) else []
-        )
-
         return jsonify({
             'status': 'ok',
         })
@@ -51,39 +45,20 @@ def run_task():
         'result': str(result),
     }
 
-    if isinstance(result, Result):
-        session = Session()
-        session.add(task_in_db)
-        result_dir = os.path.join(SETTINGS['files']['web_dir'], str(task_in_db.id))
-        response['files'] = []
-
-        if not os.path.isdir(result_dir):
-            os.makedirs(result_dir)
-
-        for file_data in result.files:
-            file_name = file_data['name']
-            shutil.move(file_data['tmp_path'], os.path.join(result_dir, file_name))
-
-            response['files'].append({
+    if web_task.model.files:
+        response['files'] = [{
                 'name': file_name,
-                'url': f'{request.host_url}files/{task_in_db.id}/{file_name}',
-            })
-
-        task_in_db.files = json.dumps(response['files'])
-        session.commit()
-
-    response['files'] = result.files
+                'url': f'{request.host_url}files/{web_task.model.id}/{file_name}',
+            } for file_name in json.loads(web_task.model.files)]
 
     return jsonify(response)
 
 
 @app.route('/files/<int:task_id>/<string:filename>', methods=['GET'])
 def files(task_id, filename):
-    session = Session()
-    task_in_db = session.query(Task).get(task_id)
-    for file in json.loads(task_in_db.files or '[]'):
-        if file['name'] != filename:
-            continue
-        return send_file(os.path.join(SETTINGS['files']['web_dir'], str(task_in_db.id), filename))
+    task_from_db = session_factory().query(Task).get(task_id)
 
-    abort(404)
+    if task_from_db is None or filename not in json.loads(task_from_db.files or '[]'):
+        abort(404)
+
+    return send_file(os.path.join(SETTINGS['files']['web_dir'], str(task_id), filename))
