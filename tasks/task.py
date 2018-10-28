@@ -32,6 +32,12 @@ class InterpretedTask:
     def run(self, **kwargs):
         return self.callback(**kwargs)
 
+    def to_dict(self):
+        return {
+            'name': self.name,
+            'json_schema': self.json_schema,
+        }
+
 
 class InterpretedTaskList:
     def __init__(self):

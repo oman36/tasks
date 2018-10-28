@@ -90,3 +90,5 @@ def init_settings(filename):
         jsonschema.validate(SETTINGS, json_schema)
     except jsonschema.ValidationError as er:
         raise FatalException(er.__str__())
+
+    SETTINGS['static_path'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
