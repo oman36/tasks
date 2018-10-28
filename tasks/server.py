@@ -15,6 +15,11 @@ from .task import WebTask, check_limit, interpreted_task_list
 app = Flask(__name__)
 
 
+@app.route('/', methods=['GET'])
+def index():
+    return send_file(os.path.join(SETTINGS['static_path'], 'index.html'))
+
+
 @app.route('/', methods=['POST'])
 def run_task():
     globals_sessions[0] = session_factory()
