@@ -183,6 +183,9 @@ class WebTask(Task):
         self.save_model()
 
     def run(self):
+        self.model.status = 'pending'
+        self.save_model()
+
         result = super().run()
 
         self.model.status = 'finished'
@@ -207,10 +210,10 @@ class WebTask(Task):
 
 def check_limit(name):
     if name in SETTINGS['limits']['names']:
-        c = globals_sessions[0].query(TaskModel).filter_by(status='new', name=name).count()
-        if c > SETTINGS['limits']['names'][name]:
+        c = globals_sessions[0].query(TaskModel).filter_by(status='pending', name=name).count()
+        if c >= SETTINGS['limits']['names'][name]:
             raise TaskLimitException(f'Limit for task type "{name}" was reached.'
                                      ' The task was put in a queue.')
 
-    if SETTINGS['limits']['global'] < globals_sessions[0].query(TaskModel).filter_by(status='new').count():
+    if SETTINGS['limits']['global'] <= globals_sessions[0].query(TaskModel).filter_by(status='pending').count():
         raise TaskLimitException('Limit for task was reached. The task was put in a queue.')

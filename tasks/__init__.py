@@ -13,12 +13,19 @@ from .settings import SETTINGS
 
 def restart_task(task_obj):
     globals_sessions[0] = session_factory()
+    globals_sessions[0].add(task_obj)
+    task_obj.status = 'pending'
+    globals_sessions[0].commit()
+
     WebTask(task_obj).run()
 
 
 def restart_tasks():
     session = session_factory()
     pool_size = min(10, SETTINGS['limits']['global'])
+
+    session.query(TaskModel).filter_by(status='pending').update({'status': 'new'})
+    session.commit()
 
     pool = Pool(pool_size)
     queryset = session.query(TaskModel).filter_by(status='new').order_by('created_at')
@@ -30,7 +37,7 @@ def restart_tasks():
         filtered = []
         current_queryset = queryset
         while exist_more and len(filtered) < pool_size:
-            tasks = current_queryset[offset:offset+pool_size]
+            tasks = current_queryset[offset:offset + pool_size]
             offset += pool_size
             exist_more = len(tasks) == pool_size
 
