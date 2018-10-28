@@ -1,3 +1,6 @@
+import math
+from datetime import datetime
+
 from sqlalchemy import (
     Column,
     Integer,
@@ -8,7 +11,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from datetime import datetime
 
 session_factory = sessionmaker()
 
@@ -39,3 +41,22 @@ class Task(Base):
 
 
 globals_sessions = [session_factory()]
+
+
+def row2dict(row):
+    return {c.name: getattr(row, c.name) for c in row.__table__.columns}
+
+
+def paginator(queryset, page, per_page=20, transformer=lambda i: i):
+    result = {
+        'page_count': math.ceil(queryset.count() / per_page),
+        'rows': [],
+        'per_page': per_page,
+    }
+
+    if result['page_count'] == 0:
+        return result
+
+    offset = per_page * (page - 1)
+    result['rows'] = [transformer(t) for t in queryset[offset: offset + per_page]]
+    return result
