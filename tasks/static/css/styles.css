@@ -1,0 +1,30 @@
+.pre-loader * {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background-color: #ccc;
+    opacity: 0.6;
+    position: absolute;
+    top: 0;
+    left: 0;
+    -webkit-animation: bounce 2.0s infinite ease-in-out;
+    animation: bounce 2.0s infinite ease-in-out;
+}
+.pre-loader *:nth-child(2){
+    -webkit-animation-delay: -0.7s;
+    animation-delay: -0.7s;
+}
+.pre-loader *:nth-child(3){
+    -webkit-animation-delay: -1.4s;
+    animation-delay: -1.4s;
+}
+@keyframes bounce {
+    from {transform: scale(0);}
+    to {transform: scale(1);}
+}
+.pre-loader {
+    display: none;
+    width: 80px;
+    height: 80px;
+    position: relative;
+}

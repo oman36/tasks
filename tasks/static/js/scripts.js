@@ -1,32 +1,102 @@
 var CONTENT = document.getElementById('content');
 
 var CACHE = {
-    via: function (key, callback, args) {
+    via: function (key, callback, success) {
         if (key in CACHE) {
-            return CACHE[key]
+            return success(CACHE[key])
         }
 
         try {
-            CACHE[key] = callback.apply(args)
+            CACHE[key] = callback((result) => success(CACHE[key] = result))
         } catch (e) {
             console.error(e);
-            return null;
         }
-        return CACHE[key]
     }
 };
 
 var ROUTES = {
     '': function () {
         MENU.setActive('home');
-        CONTENT.innerHTML = ''
+        API.get_list_of_task_types(function (list_of_task_types) {
+            API.get_limits(function (limits) {
+                CONTENT.innerHTML = TEMPLATES.home(list_of_task_types, limits);
+
+                var main_form = document.getElementById('task_form');
+                var json_form_group = document.getElementById('json_form_group');
+                var responseDom = document.getElementById('response');
+                var locker = {
+                    locked: false,
+                    lock: function () {
+                        locker.locked = true;
+                        main_form.querySelector('.pre-loader').style.display = 'block';
+                    },
+                    unlock: function () {
+                        locker.locked = false;
+                        main_form.querySelector('.pre-loader').style.display = 'none';
+                    }
+                };
+
+                function paramsError(message) {
+                    if (message) {
+                        json_form_group.querySelector('.invalid-feedback').innerHTML = message;
+                        json_form_group.querySelector('textarea').classList.add('is-invalid');
+                    } else {
+                        json_form_group.querySelector('textarea').classList.remove('is-invalid');
+                    }
+                }
+
+                main_form.onsubmit = function (e) {
+                    e.preventDefault();
+
+                    if (locker.locked) {
+                        return;
+                    }
+
+                    locker.lock();
+
+                    try {
+                        var formData = new FormData(e.target);
+                        var jsonObject = {};
+
+                        for (var [key, value]  of formData.entries()) {
+                            jsonObject[key] = value;
+                        }
+
+                        if (!jsonObject['email']) {
+                            delete jsonObject['email'];
+                        }
+
+                        paramsError();
+
+                        try {
+                            jsonObject['params'] = JSON.parse(jsonObject['params'])
+                        } catch (e) {
+                            return paramsError('Invalid json')
+                        }
+
+                        if ('object' !== typeof jsonObject['params'] || jsonObject['params'] instanceof Array) {
+                            return paramsError('Params must be object or null')
+                        }
+
+                        responseDom.innerHTML = '';
+                        API._.post_json('/', jsonObject, function (response) {
+                            responseDom.innerHTML = TEMPLATES.run_task_response(response)
+                        }, null, () => locker.unlock());
+
+                    } catch (e) {
+                        locker.unlock()
+                    }
+                }
+            })
+        });
     },
     'task_types': function () {
         MENU.setActive('task_types');
-        CONTENT.innerHTML = TEMPLATES.list_of_task_types(
-            API.get_list_of_task_types(),
-            API.get_limits(),
-        )
+        API.get_list_of_task_types(function (list_of_task_types) {
+            API.get_limits(function (limit) {
+                CONTENT.innerHTML = TEMPLATES.list_of_task_types(list_of_task_types, limit);
+            });
+        });
     },
     '404': function () {
         MENU.setActive(null);
@@ -34,53 +104,86 @@ var ROUTES = {
     },
     'in_progress': function () {
         MENU.setActive('in_progress');
-        CONTENT.innerHTML = TEMPLATES.in_progress_list(API.get_in_progress());
+        API.get_in_progress(function (in_progress) {
+            CONTENT.innerHTML = TEMPLATES.in_progress_list(in_progress);
+        });
+
     },
     'completed': function (page) {
         page = parseInt(page);
         MENU.setActive('completed');
-        var data = API.get_completed(page);
-        CONTENT.innerHTML =
-            TEMPLATES.paginator(page, data.page_count, (n) => `#completed/${n}`) +
-            TEMPLATES.completed_list(data);
+        API.get_completed(function (data) {
+            CONTENT.innerHTML =
+                TEMPLATES.paginator(page, data.page_count, (n) => `#completed/${n}`) +
+                TEMPLATES.completed_list(data);
+        }, page);
     },
 };
 
 var API = {
     _: {
-        request: function (method, url) {
+        request: function (method, url, success, fail, complete) {
             var xhr = new XMLHttpRequest();
-            xhr.open(method, url, false);
+            xhr.open(method, url);
             xhr.send();
-            if (xhr.status !== 200) {
-                alert(xhr.status + ': ' + xhr.statusText);
-                return null;
-            }
-            return xhr.responseText;
+            xhr.onload = function () {
+                if (200 <= xhr.status && xhr.status < 300) {
+                    (success || (() => null))(xhr.responseText, xhr.status);
+
+                } else {
+                    (fail || (() => alert(xhr.status + ': ' + xhr.statusText)))(xhr);
+                }
+                (complete || (() => null))(xhr)
+            };
         },
-        get: function (url) {
-            return API._.request('GET', url)
+        get: function (url, success, fail, complete) {
+            return API._.request('GET', url, success, fail, complete)
         },
-        get_json: function (url) {
-            return JSON.parse(API._.get(url) || null)
+        get_json: function (url, success, fail, complete) {
+            return API._.get(url, (json) => success(JSON.parse(json)), fail, complete)
         },
         build_query: function (params) {
             return Object.keys(params).map(key => key + '=' + params[key]).join('&');
         },
+        post_json: function (url, object, success, fail, complete) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', url);
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.send(JSON.stringify(object));
+            xhr.onload = function () {
+                if (200 <= xhr.status && xhr.status < 300) {
+                    success(JSON.parse(xhr.responseText), xhr.status);
+                } else {
+                    (fail || function (x) {
+                        if (x.status === 400) {
+                            try {
+                                var response = JSON.parse(x.responseText);
+
+                                return alert(`${response.status}: [${response.error_code}] ${response.error_msg}`);
+                            } catch (e) {
+                            }
+                        }
+                        alert(x.status + ': ' + x.statusText);
+                    })(xhr);
+                }
+
+                (complete || (() => null))(xhr)
+            };
+        }
     },
-    get_list_of_task_types: function () {
-        return CACHE.via('list_of_task_types', () => API._.get_json('/get_list_of_task_types'));
+    get_list_of_task_types: function (success) {
+        return CACHE.via('list_of_task_types', (s) => API._.get_json('/get_list_of_task_types', s), success);
     },
-    get_limits: function () {
-        return CACHE.via('limits', () => API._.get_json('/get_limits'));
+    get_limits: function (success) {
+        return CACHE.via('limits', (s) => API._.get_json('/get_limits', s), success);
     },
-    get_in_progress: function () {
-        return API._.get_json('/get_in_progress');
+    get_in_progress: function (success) {
+        return API._.get_json('/get_in_progress', success);
     },
-    get_completed: function (page) {
+    get_completed: function (success, page) {
         return API._.get_json('/get_completed?' + API._.build_query({
             page: page || 1,
-        }));
+        }), success);
     },
 };
 
@@ -232,7 +335,7 @@ var TEMPLATES = {
         }
 
         function renderBtn(btn) {
-            var li = `<li class="page-item ${btn.active ? 'active': ''}">`;
+            var li = `<li class="page-item ${btn.active ? 'active' : ''}">`;
             if (btn.link) {
                 li += `<a class="page-link" href="${btn.link}">${btn.text}</a>`
             } else {
@@ -247,6 +350,55 @@ var TEMPLATES = {
           ${pages.reduce((b, p) => b + renderBtn(p), '')}
           </ul>
         </nav>`
+    },
+    home: function (task_types, limits) {
+        function renderOption(type) {
+            return `<option value="${type.name}">${type.name} ${type.name in limits ? `(${limits[type.name]})` : ''}</option>`;
+        }
+
+        return `
+            <h1>Run task</h1>
+            <form method="post" action="/" id="task_form">
+                <div class="form-group">
+                    <label for="task_name">Task name</label>
+                    <select name="task_name" id="task_name" class="form-control">
+                        ${task_types.reduce((b, t) => b + renderOption(t), '')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="name">Email</label>
+                    <input class="form-control" type="email" name="email" id="params">
+                </div>
+                <div class="form-group" id="json_form_group">
+                    <label for="name">Params</label>
+                    <textarea class="form-control" name="params" id="params">{}</textarea>
+                    <div class="invalid-feedback"></div>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-success" >run</button>
+                </div>
+                ${TEMPLATES.preloader()}
+            </form>
+            <div id="response"></div>`
+    },
+    run_task_response(response) {
+        response = {
+            "files": [{"name": "statistics.tsv", "url": "http://0.0.0.0:5000/files/96/statistics.tsv"}],
+            "result": "Complete statistics"
+        };
+        return `
+            <div class="card">
+              <div class="card-body">
+                <h5 class="card-title">Response</h5>
+                <p class="card-text">${response.result}</p>
+                ${(response.files||[]).reduce(
+                    (b, f) => b + `<a href="${f.url}" target="_blank" class="card-link">${f.name}</a>`, ''
+                )}
+              </div>
+            </div>`
+    },
+    preloader: function () {
+        return `<div class="pre-loader"><div></div><div></div></div>`
     }
 };
 

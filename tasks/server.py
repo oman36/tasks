@@ -7,7 +7,7 @@ from flask import jsonify
 from flask import request
 from flask import send_file
 
-from .exceptions import TasksBaseException
+from .exceptions import TasksBaseException, FatalException
 from .orm import Task, session_factory, globals_sessions, row2dict, paginator
 from .settings import SETTINGS
 from .task import WebTask, check_limit, interpreted_task_list
@@ -36,12 +36,18 @@ def run_task():
 
         result = web_task.run()
 
+    except FatalException as er:
+        return jsonify({
+            'status': 'ERROR',
+            'error_code': er.get_code(),
+            'error_msg': er.get_message(),
+        }), 500
     except TasksBaseException as er:
         return jsonify({
             'status': 'ERROR',
             'error_code': er.get_code(),
             'error_msg': er.get_message(),
-        })
+        }), 400
 
     if 'email' in data:
         return jsonify({
@@ -78,7 +84,7 @@ def static_files(filename):
 
 @app.route('/get_list_of_task_types', methods=['GET'])
 def get_list_of_task_types():
-    return jsonify([t.to_dict() for t in interpreted_task_list.tasks_inited.values()])
+    return jsonify([t.to_dict() for t in interpreted_task_list.tasks_inited.values() if t.name != 'runserver'])
 
 
 @app.route('/get_limits', methods=['GET'])
