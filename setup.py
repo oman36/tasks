@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='tasks',
-    version='0.7',
+    version='0.8',
     description='Manager for delayed tasks',
     url='http://github.com/oman36/tasks',
     author='Petrov Vladimir',
