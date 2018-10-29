@@ -74,7 +74,12 @@ def files(task_id, filename):
     if task_from_db is None or filename not in json.loads(task_from_db.files or '[]'):
         abort(404)
 
-    return send_file(os.path.join(SETTINGS['files']['web_dir'], str(task_id), filename))
+    try:
+        response = send_file(os.path.join(SETTINGS['files']['web_dir'], str(task_id), filename))
+    except FileNotFoundError:
+        return abort(404)
+
+    return response
 
 
 @app.route('/static/<string:filename>', methods=['GET'])
@@ -96,7 +101,7 @@ def get_limits():
 def in_progress():
     globals_sessions[0] = session_factory()
     queryset = globals_sessions[0].query(Task)\
-        .filter(Task.status != 'finished')\
+        .filter(Task.status.notin_(('finished', 'failed',)))\
         .order_by(Task.status.desc(), Task.created_at)
 
     return jsonify([row2dict(t) for t in queryset])
@@ -106,7 +111,7 @@ def in_progress():
 def get_completed():
     globals_sessions[0] = session_factory()
     queryset = globals_sessions[0].query(Task)\
-        .filter(Task.status == 'finished')\
+        .filter(Task.status.in_(('finished', 'failed',)))\
         .order_by(Task.created_at.desc())
 
     def transformer(row):

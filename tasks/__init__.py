@@ -14,8 +14,6 @@ from .settings import SETTINGS
 def restart_task(task_obj):
     globals_sessions[0] = session_factory()
     globals_sessions[0].add(task_obj)
-    task_obj.status = 'pending'
-    globals_sessions[0].commit()
 
     WebTask(task_obj).run()
 

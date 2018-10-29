@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import time
+import sys
 
 import jsonschema
 
@@ -191,8 +192,13 @@ class WebTask(Task):
     def run(self):
         self.model.status = 'pending'
         self.save_model()
-
-        result = super().run()
+        try:
+            result = super().run()
+        except:
+            self.model.status = 'failed'
+            self.model.result = sys.exc_info()[1]
+            self.save_model()
+            raise
 
         self.model.status = 'finished'
         self.model.result = str(result)
