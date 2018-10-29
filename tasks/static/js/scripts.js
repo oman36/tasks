@@ -22,7 +22,6 @@ var ROUTES = {
                 CONTENT.innerHTML = TEMPLATES.home(list_of_task_types, limits);
 
                 var main_form = document.getElementById('task_form');
-                var json_form_group = document.getElementById('json_form_group');
                 var responseDom = document.getElementById('response');
                 var locker = {
                     locked: false,
@@ -38,10 +37,10 @@ var ROUTES = {
 
                 function paramsError(message) {
                     if (message) {
-                        json_form_group.querySelector('.invalid-feedback').innerHTML = message;
-                        json_form_group.querySelector('textarea').classList.add('is-invalid');
+                        main_form.querySelector('.invalid-feedback').innerHTML = message;
+                        main_form.querySelector('textarea[name=params]').classList.add('is-invalid');
                     } else {
-                        json_form_group.querySelector('textarea').classList.remove('is-invalid');
+                        main_form.querySelector('textarea[name=params]').classList.remove('is-invalid');
                     }
                 }
 
@@ -55,38 +54,86 @@ var ROUTES = {
                     locker.lock();
 
                     try {
-                        var formData = new FormData(e.target);
-                        var jsonObject = {};
-
-                        for (var [key, value]  of formData.entries()) {
-                            jsonObject[key] = value;
-                        }
+                        var jsonObject = FROM_PARSER.parse(e.target);
 
                         if (!jsonObject['email']) {
                             delete jsonObject['email'];
                         }
 
-                        paramsError();
+                        window.jsob = jsonObject;
 
-                        try {
-                            jsonObject['params'] = JSON.parse(jsonObject['params'])
-                        } catch (e) {
-                            return paramsError('Invalid json')
-                        }
+                        if ('string' === typeof jsonObject['params']) {
+                            paramsError();
 
-                        if ('object' !== typeof jsonObject['params'] || jsonObject['params'] instanceof Array) {
-                            return paramsError('Params must be object or null')
+                            try {
+                                jsonObject['params'] = JSON.parse(jsonObject['params'])
+                            } catch (e) {
+                                return paramsError('Invalid json')
+                            }
+
+                            if ('object' !== typeof jsonObject['params'] || jsonObject['params'] instanceof Array) {
+                                return paramsError('Params must be object or null')
+                            }
                         }
 
                         responseDom.innerHTML = '';
                         API._.post_json('/', jsonObject, function (response) {
                             responseDom.innerHTML = TEMPLATES.run_task_response(response)
-                        }, null, () => locker.unlock());
+                        }, function (xhr) {
+                            if (xhr.status === 400) {
+                                try {
+                                    var response = JSON.parse(xhr.responseText);
+                                    return responseDom.innerHTML = TEMPLATES.run_task_response({
+                                        'result': `<div class="alert alert-danger"><code>
+                                                    <pre>${response.status}: [${response.error_code}] ${response.error_msg}</pre>
+                                                    </code></div>`
+                                    });
+                                } catch (e) {
+                                }
+                            }
+                            return responseDom.innerHTML = TEMPLATES.run_task_response({
+                                'result': `<div class="alert alert-danger"><code>
+                                                ${xhr.status}:${xhr.statusText}
+                                                <pre>${xhr.responseText}</pre>
+                                            </code></div>`
+                            });
+                        }, () => locker.unlock());
 
                     } catch (e) {
+                        console.error(e);
                         locker.unlock()
                     }
-                }
+                };
+
+                (function () {
+                    var task_name = document.getElementById('task_name');
+                    var params_block = document.getElementById('params-block');
+                    var defaultBlock = `<div class="form-group" id="json_form_group">
+                        <label for="name">Params</label>
+                        <textarea class="form-control" name="params" id="params">{}</textarea>
+                        <div class="invalid-feedback"></div>
+                    </div>`;
+                    var dict_of_task_types = list_of_task_types.reduce(
+                        function (b, task_type) {
+                            b[task_type.name] = task_type;
+                            return b;
+                        }, {});
+
+                    document.getElementById('task_name').onchange = function (e) {
+                        var json_schema = dict_of_task_types[e.target.value].json_schema;
+
+                        if (Object.keys(json_schema).length === 0) {
+                            params_block.innerHTML = defaultBlock;
+                        } else {
+                            params_block.innerHTML = JSON_PARSER.parse(json_schema)('Params', 'params');
+                            JSON_PARSER.initEvents(main_form);
+                        }
+                    };
+
+                    var evt = document.createEvent("HTMLEvents");
+                    evt.initEvent("change", false, true);
+                    task_name.dispatchEvent(evt);
+                })();
             })
         });
     },
@@ -369,11 +416,7 @@ var TEMPLATES = {
                     <label for="name">Email</label>
                     <input class="form-control" type="email" name="email" id="params">
                 </div>
-                <div class="form-group" id="json_form_group">
-                    <label for="name">Params</label>
-                    <textarea class="form-control" name="params" id="params">{}</textarea>
-                    <div class="invalid-feedback"></div>
-                </div>
+                <div id="params-block"></div>
                 <div class="form-group">
                     <button type="submit" class="btn btn-success" >run</button>
                 </div>
@@ -382,18 +425,16 @@ var TEMPLATES = {
             <div id="response"></div>`
     },
     run_task_response(response) {
-        response = {
-            "files": [{"name": "statistics.tsv", "url": "http://0.0.0.0:5000/files/96/statistics.tsv"}],
-            "result": "Complete statistics"
-        };
+        function renderFile(f) {
+            return `<a href="${f.url}" target="_blank" class="card-link">${f.name}</a>`;
+        }
+
         return `
             <div class="card">
               <div class="card-body">
                 <h5 class="card-title">Response</h5>
                 <p class="card-text">${response.result}</p>
-                ${(response.files||[]).reduce(
-                    (b, f) => b + `<a href="${f.url}" target="_blank" class="card-link">${f.name}</a>`, ''
-                )}
+                ${(response.files || []).reduce((b, f) => b + renderFile(f), '')}
               </div>
             </div>`
     },
