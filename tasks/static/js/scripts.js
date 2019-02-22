@@ -119,15 +119,25 @@ var ROUTES = {
                             return b;
                         }, {});
 
-                    document.getElementById('task_name').onchange = function (e) {
-                        var json_schema = dict_of_task_types[e.target.value].json_schema;
+                    var smartFormIsOn = false;
+                    document.getElementById('smart_form').onchange = function (e) {
+                        smartFormIsOn = e.target.checked;
+                        renderForm()
+                    };
+                    document.getElementById('smart_form').dispatchEvent(new Event('change'));
 
-                        if (Object.keys(json_schema).length === 0) {
+                    function renderForm() {
+                        var json_schema = dict_of_task_types[document.getElementById('task_name').value].json_schema;
+                        if (!smartFormIsOn || Object.keys(json_schema).length === 0) {
                             params_block.innerHTML = defaultBlock;
                         } else {
                             params_block.innerHTML = JSON_PARSER.parse(json_schema)('Params', 'params');
                             JSON_PARSER.initEvents(main_form);
                         }
+                    }
+
+                    document.getElementById('task_name').onchange = function (e) {
+                        renderForm()
                     };
 
                     var evt = document.createEvent("HTMLEvents");
@@ -415,6 +425,12 @@ var TEMPLATES = {
                 <div class="form-group">
                     <label for="name">Email</label>
                     <input class="form-control" type="email" name="email" id="params">
+                </div>
+                <div class="form-group">
+                    <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="smart_form" id="smart_form">
+                    <label class="form-check-label" for="smart_form">Use smart form</label>
+                    </div>
                 </div>
                 <div id="params-block"></div>
                 <div class="form-group">
